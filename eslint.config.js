@@ -25,5 +25,13 @@ export default tseslint.config(
 			],
 			"@typescript-eslint/no-unused-vars": "off"
 		}
+	},
+	{
+		// Node-side runtime config service and Vite config.
+		files: ["src/server/**/*.ts", "vite.config.ts"],
+		languageOptions: {
+			ecmaVersion: 2023,
+			globals: globals.node
+		}
 	}
 )
