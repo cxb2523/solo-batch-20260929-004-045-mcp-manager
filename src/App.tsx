@@ -1,9 +1,10 @@
 import { ApplyingInstructions } from "@/components/applying-instructions"
 import { LoadingInstructions } from "@/components/loading-instructions"
 import { MCPServers } from "@/components/mcp-servers"
-import { SERVER_CONFIGS } from "@/server-configs"
+import { fetchRuntimeConfig, resolveInitialMode } from "@/runtime-config"
+import { SERVER_CONFIGS, type ServerConfig } from "@/server-configs"
 import type React from "react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 function App() {
 	const [jsonContent, setJsonContent] = useState<{
@@ -18,6 +19,19 @@ function App() {
 		"idle" | "success" | "error"
 	>("idle")
 	const [isInstructionsOpen, setIsInstructionsOpen] = useState(true)
+	const [serverConfigs, setServerConfigs] =
+		useState<Record<string, ServerConfig>>(SERVER_CONFIGS)
+	const [runtimeMode, setRuntimeMode] = useState(resolveInitialMode)
+
+	useEffect(() => {
+		let active = true
+		void fetchRuntimeConfig(runtimeMode).then((result) => {
+			if (active) setServerConfigs(result.configs)
+		})
+		return () => {
+			active = false
+		}
+	}, [runtimeMode])
 
 	const handleJsonInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
 		try {
@@ -31,8 +45,9 @@ function App() {
 		}
 	}
 
-	const handleServerAdd = (serverType: keyof typeof SERVER_CONFIGS) => {
-		const serverConfig = SERVER_CONFIGS[serverType]
+	const handleServerAdd = (serverType: string) => {
+		const serverConfig = serverConfigs[serverType]
+		if (!serverConfig) return
 
 		// Ensure we only add servers with required properties
 		const newServer = {
@@ -134,6 +149,9 @@ function App() {
 						uploadStatus === "success" && (
 							<div className="space-y-6">
 								<MCPServers
+									serverConfigs={serverConfigs}
+									runtimeMode={runtimeMode}
+									onModeChange={setRuntimeMode}
 									jsonContent={{
 										mcpServers:
 											jsonContent.mcpServers as Record<

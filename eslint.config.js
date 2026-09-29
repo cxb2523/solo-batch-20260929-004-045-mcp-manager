@@ -8,7 +8,7 @@ export default tseslint.config(
 	{ ignores: ["dist"] },
 	{
 		extends: [js.configs.recommended, ...tseslint.configs.recommended],
-		files: ["**/*.{ts,tsx}"],
+		files: ["src/**/*.{ts,tsx}"],
 		languageOptions: {
 			ecmaVersion: 2020,
 			globals: globals.browser
@@ -23,6 +23,17 @@ export default tseslint.config(
 				"warn",
 				{ allowConstantExport: true }
 			],
+			"@typescript-eslint/no-unused-vars": "off"
+		}
+	},
+	{
+		extends: [js.configs.recommended, ...tseslint.configs.recommended],
+		files: ["src/server/**/*.ts", "scripts/**/*.ts", "vite.config.ts"],
+		languageOptions: {
+			ecmaVersion: 2023,
+			globals: { ...globals.node }
+		},
+		rules: {
 			"@typescript-eslint/no-unused-vars": "off"
 		}
 	}

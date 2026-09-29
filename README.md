@@ -85,6 +85,105 @@ src/
    bun run build
    ```
 
+## Runtime Config Injection
+
+The MCP server list is served to the UI by a **persistent local service**
+instead of being frozen into build-time constants.
+
+- Entry point: `src/server/inject.ts` (Node 24+ runs TypeScript directly via
+  type stripping; no separate compile step needed).
+   - Start it with `npm run serve:config` — it listens on
+     `http://127.0.0.1:5179`.
+- Default manifest: `src/server-configs.ts` (the compile-time inlined
+  `SERVER_CONFIGS` list).
+- Three modes (`local`, `staging`, `prod`) are resolved via
+  `GET /config/:mode`:
+  - `local` — resolves straight from the inlined default list.
+  - `staging` / `prod` — pull a remote manifest at runtime, caching it with a
+    10s TTL. Upstream URLs can be overridden with
+    `MCP_STAGING_MANIFEST_URL` / `MCP_PROD_MANIFEST_URL`.
+  - If the upstream is unreachable, returns an invalid payload, or times out
+    (4s), the mode transparently falls back to the inlined default list.
+- `GET /health` reports liveness and the mode list.
+- `GET /status` is an embedded, self-refreshing status page for screen
+  recordings; `GET /status?json=1` returns the same data as JSON. It shows the
+  current mode, resolved server count, resource base, TTL, cache hits,
+  fallback count, epoch and the cross-mode build invariants.
+
+### Decision: runtime pull with self-managed TTL + failure fallback
+
+We chose **runtime pull with self-managed TTL and failure fallback** over a
+fully compile-time-inlined manifest.
+
+- **Chosen:** remote modes (`staging`, `prod`) fetch at runtime, cache the
+  result per mode for 10s, and fall back to the inlined default list on any
+  real failure. The inlined list therefore stays as the ultimate floor, but
+  manifest changes no longer require shipping a new build.
+- **Rejected:** compile-time-only inlining. It is the simplest and the most
+  offline-friendly option, but it cannot update any mode without a rebuild and
+  cannot demonstrate the runtime TTL/fallback behavior the injector exists to
+  provide.
+
+### Decision: biome and eslint are layered and serial
+
+We chose a **layered, serial chain** over merging both tools into one
+synthetic pass.
+
+- **Chosen:** `npm run lint` runs `biome lint .` first and only then
+  `eslint .` (short-circuiting on the first failure). `bun run check` layers
+  type-checking (`tsc -b`) ahead of Biome formatting. Each layer has a clear
+  responsibility — types, formatting/import hygiene, framework rules — and the
+  failure surface stays easy to attribute. ESLint additionally layers a
+  browser-global config for `src/**` and a Node-global config for
+  `src/server/**`, `scripts/**` and `vite.config.ts`.
+- **Rejected:** collapsing the tools into one indistinguishable step, which
+  would hide which tool owns a violation and make the toolchain harder to
+  extend.
+
+### Concurrency and state guarantees
+
+- **Single-flight per mode:** concurrent requests for the same mode share one
+  in-flight Promise. Only the first triggers a real resolution; the rest await
+  the same Promise and count as cache hits. Fresh TTL cache reads also count as
+  cache hits.
+- **Epoch guard on mode switch:** switching modes bumps a monotonic epoch.
+  Every request captures the current epoch; when its response settles it is
+  applied to the visible status only if its epoch and mode still match, so a
+  slow response from an old mode can never overwrite the newer state.
+- **Fallback accounting:** `fallbackCount` increments exactly once per genuine
+  upstream failure. Fallback results are deliberately not cached, so a retry
+  that still cannot reach the upstream is counted again as a real fallback;
+  cache hits never touch the counter.
+
+### Build invariants and reproducibility
+
+`outDir` (`dist`), `base` (`/`) and the tsconfig reference chain
+(`tsconfig.app.json`, `tsconfig.node.json`) are identical for every mode. They
+are exported once from `src/server/modes.ts` (`BUILD_INVARIANTS`) and mirrored
+  by `vite.config.ts`; every `/config/:mode` response echoes them back. Because
+  mode selection never changes build input or output, two clean builds produce
+  byte-identical, hash-stable artifacts.
+
+### Verification
+
+```bash
+npm run verify:config
+```
+
+The script starts the service, fires three concurrent requests for one mode
+  (asserting single-flight cache hits), switches modes with a slow upstream in
+  flight (asserting the epoch drops the stale result), drives unreachable
+  upstreams (asserting fallback to the default list and that the fallback
+  counter only grows on real fallbacks), and checks `/health`, the embedded
+  `/status` page and the build invariants.
+
+Also run the usual gates:
+
+```bash
+npm run build
+npm run lint
+```
+
 ## Contributing
 
 Contributions are extremely welcome! Please open a PR with new MCP servers or any other improvements to the codebase.

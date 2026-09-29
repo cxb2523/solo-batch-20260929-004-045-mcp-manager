@@ -1,7 +1,7 @@
 import { MCPServerCard } from "@/components/mcp-server-card"
-import { SERVER_CONFIGS } from "@/server-configs"
+import type { ServerConfig } from "@/server-configs"
 import { capitalizeFirstLetter } from "@/utils"
-import { Plus, Save, X } from "lucide-react"
+import { Plus, X } from "lucide-react"
 
 type MCPServer = {
 	command: string
@@ -17,13 +17,19 @@ type MCPConfig = {
 }
 
 type MCPServersProps = {
+	serverConfigs: Record<string, ServerConfig>
+	runtimeMode: string
+	onModeChange: (mode: string) => void
 	jsonContent: MCPConfig
 	onUpdate: (newContent: MCPConfig) => void
-	onServerAdd: (serverType: keyof typeof SERVER_CONFIGS) => void
+	onServerAdd: (serverType: string) => void
 	onServerRemove: (serverType: string) => void
 }
 
 export function MCPServers({
+	serverConfigs,
+	runtimeMode,
+	onModeChange,
 	jsonContent,
 	onUpdate,
 	onServerAdd,
@@ -51,6 +57,16 @@ export function MCPServers({
 			<div className="flex justify-between items-center mb-8">
 				<div className="flex items-center gap-4">
 					<h2 className="text-2xl text-center">Your MCP Servers</h2>
+					<select
+						className="select select-bordered select-sm"
+						value={runtimeMode}
+						onChange={(event) => onModeChange(event.target.value)}
+						aria-label="Runtime config mode"
+					>
+						<option value="local">local</option>
+						<option value="staging">staging</option>
+						<option value="prod">prod</option>
+					</select>
 					<button
 						type="button"
 						className="btn btn-primary btn-sm"
@@ -67,6 +83,11 @@ export function MCPServers({
 					</button>
 				</div>
 			</div>
+			<p className="text-xs opacity-60 -mt-4">
+				{capitalizeFirstLetter(runtimeMode)} mode ·{" "}
+				{Object.keys(serverConfigs).length} servers resolved via the
+				local runtime injector at 127.0.0.1:5179
+			</p>
 
 			<dialog id="add_server_modal" className="modal backdrop-blur-sm">
 				<div className="modal-box rounded-3xl">
@@ -88,15 +109,13 @@ export function MCPServers({
 					</div>
 
 					<div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto px-4">
-						{Object.keys(SERVER_CONFIGS).map((serverType) => (
+						{Object.keys(serverConfigs).map((serverType) => (
 							<button
 								key={serverType}
 								type="button"
 								className="w-full bg-base-200 hover:bg-base-300 rounded-3xl p-4 flex items-center gap-6 h-24"
 								onClick={() => {
-									onServerAdd(
-										serverType as keyof typeof SERVER_CONFIGS
-									)
+									onServerAdd(serverType)
 									;(
 										document.getElementById(
 											"add_server_modal"
@@ -106,11 +125,7 @@ export function MCPServers({
 							>
 								<div className="my-auto mx-2">
 									<img
-										src={
-											SERVER_CONFIGS[
-												serverType as keyof typeof SERVER_CONFIGS
-											].icon
-										}
+										src={serverConfigs[serverType].icon}
 										alt={`${serverType} icon`}
 										className="w-10 h-10 object-contain"
 									/>
@@ -120,11 +135,7 @@ export function MCPServers({
 										{capitalizeFirstLetter(serverType)}
 									</span>
 									<p className="text-sm opacity-80">
-										{
-											SERVER_CONFIGS[
-												serverType as keyof typeof SERVER_CONFIGS
-											].description
-										}
+										{serverConfigs[serverType].description}
 									</p>
 								</div>
 							</button>
@@ -139,23 +150,16 @@ export function MCPServers({
 			<div className="space-y-4">
 				{hasServers ? (
 					Object.entries(jsonContent.mcpServers).map(
-						([name, config]) => {
-							const serverConfig =
-								SERVER_CONFIGS[
-									name as keyof typeof SERVER_CONFIGS
-								]
-
-							return (
-								<MCPServerCard
-									key={name}
-									serverName={name}
-									config={config}
-									icon={serverConfig?.icon}
-									onUpdate={handleServerUpdate}
-									onDelete={handleServerDelete}
-								/>
-							)
-						}
+						([name, config]) => (
+							<MCPServerCard
+								key={name}
+								serverName={name}
+								config={config}
+								serverConfigs={serverConfigs}
+								onUpdate={handleServerUpdate}
+								onDelete={handleServerDelete}
+							/>
+						)
 					)
 				) : (
 					<p className=" text-gray-500 text-center">

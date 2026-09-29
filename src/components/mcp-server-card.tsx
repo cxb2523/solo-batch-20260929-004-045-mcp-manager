@@ -5,7 +5,7 @@ import { PostgresConfig } from "@/components/server-configs/postgres-config"
 import { SentryConfig } from "@/components/server-configs/sentry-config"
 import { SQLiteConfig } from "@/components/server-configs/sqlite-config"
 import { TerminalCommand } from "@/components/terminal-command"
-import { SERVER_CONFIGS } from "@/server-configs"
+import type { ServerConfig } from "@/server-configs"
 import { ArrowUpRight, Trash2 } from "lucide-react"
 
 type MCPServerConfig = {
@@ -17,7 +17,7 @@ type MCPServerConfig = {
 type MCPServerCardProps = {
 	serverName: string
 	config: MCPServerConfig
-	icon?: string
+	serverConfigs: Record<string, ServerConfig>
 	onUpdate: (name: string, newConfig: MCPServerConfig) => void
 	onDelete: (name: string) => void
 }
@@ -25,7 +25,7 @@ type MCPServerCardProps = {
 export function MCPServerCard({
 	serverName,
 	config,
-	icon,
+	serverConfigs,
 	onUpdate,
 	onDelete
 }: MCPServerCardProps) {
@@ -92,14 +92,13 @@ export function MCPServerCard({
 		onDelete(serverName)
 	}
 
-	const serverConfig =
-		SERVER_CONFIGS[serverName as keyof typeof SERVER_CONFIGS]
+	const serverConfig = serverConfigs[serverName]
 	const isFilesystemServer = serverName === "filesystem"
 	const isPostgresServer = serverName === "postgres"
 	const isSqliteServer = serverName === "sqlite"
 	const isObsidianServer = serverName === "obsidian"
 	const isSentryServer = serverName === "sentry"
-	const iconUrl = icon || serverConfig?.icon
+	const iconUrl = serverConfig?.icon
 
 	return (
 		<div className="join join-vertical w-full">
